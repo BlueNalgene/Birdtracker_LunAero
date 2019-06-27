@@ -37,7 +37,7 @@ from LunCV import Manipulations, RingBuffer
 def main(the_file, gui, pos_frame, procpath):
 	'''main function
 	'''
-
+	firstframe = pos_frame
 	file_datetime = str(the_file)
 	file_datetime = (file_datetime.split('/')[-1].split('outA.'))[0]
 
@@ -103,15 +103,16 @@ def main(the_file, gui, pos_frame, procpath):
 
 				# Deal with ringbuffer on frames
 				rbf.ringbuffer_cycle(img)
-				img = rbf.ringbuffer_process(img)
-				goodlist = rbf.pull_list()
-				# Number of contours limiter
-				if goodlist.size > 0 and goodlist.size < 300:
-					img = rbf.bird_range(img, frame, temp, goodlist)
+				if pos_frame - 5 > firstframe:
+					img = rbf.ringbuffer_process(img)
+					goodlist = rbf.pull_list()
+					# Number of contours limiter
+					if goodlist.size > 0 and goodlist.size < 300:
+						img = rbf.bird_range(img, frame, temp, goodlist)
 
-				if gui:
-					#img[img < 0] = 255
-					cv2.imshow('image', img)
+					if gui:
+						#img[img < 0] = 255
+						cv2.imshow('image', img)
 
 			cv2.waitKey(1)
 
