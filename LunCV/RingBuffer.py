@@ -500,8 +500,9 @@ class RingBufferClass():
 				True, False)
 		# If something remains, we record the frame in a note to check by human later
 		if np.sum(inout[testarr & testarr2]) > 0:
+			print("inout\n", inout[:, 0].shape, inout[:, 0])
 			with open(self.procpath + '/edgecheck.csv', 'ab') as fff:
-				np.savetxt(fff, inout[0][0], delimiter=',')
+				np.savetxt(fff, np.unique(inout[:, 0]), delimiter=',', fmt='%0.2f')
 		return
 
 
