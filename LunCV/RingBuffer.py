@@ -29,7 +29,7 @@ class RingBufferClass():
 	# This is a local framecounter.
 	pfs = 0
 
-	def __init__(self, procpath, radr=10, rada=0.0, sper=2, spea=2e-5, angr=5e-2, anga=2e-5, \
+	def __init__(self, procpath, radr=10, rada=0.0, sper=.1, spea=1, angr=5e-2, anga=2e-5, \
 		fill=(255, 0, 63), width=1, last=5):
 		"""
 		Initialize the class with the following commands.  It may be called with
