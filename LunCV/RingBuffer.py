@@ -345,6 +345,8 @@ class RingBufferClass():
 			outs[outslist[i]] = self.gapinghole(outs[outslist[i]])
 			# Test distance/direction
 			outs[outslist[i]] = self.distdirtest(outs[outslist[i]])
+			# Test for direction and cleanup
+			outs[outslist[i]] = self.direction_cleanup(outs[outslist[i]])
 			# Run a speed test.  Nothing faster than our threshold
 			outs[outslist[i]] = self.speedtest(outs[outslist[i]])
 			# Only keep continuous lines
@@ -446,6 +448,21 @@ class RingBufferClass():
 		inout = inout[np.isclose(inout[:, 8], inout[:, 19], rtol=self.sper, atol=self.spea)]
 		# Test direction
 		inout = inout[np.isclose(inout[:, 10], inout[:, 21], rtol=self.angr, atol=self.anga)]
+		return inout
+
+	def direction_cleanup(self, inout):
+		"""
+		Single pass direction test for negative direction values.  Prevents lines from collapsing.
+
+		:param inout: Numpy array input.  Must have size [:, 22]
+
+		:returns: np.ndarray
+			-out - Output numpy array with the shape [:, 22]
+		"""
+		inout = np.column_stack((np.sign(np.subtract(inout[:, 5], inout[:, 1])), np.sign(np.subtract(inout[:, 6], inout[:, 2])), np.sign(np.subtract(inout[:, 16], inout[:, 12])), np.sign(np.subtract(inout[:, 17], inout[:, 13]))))
+		inout = np.abs(np.column_stack((np.add(inout[:, 0], inout[:, 2]), np.add(inout[:, 1], inout[:, 3]))))
+		inout = np.add(inout[:,0],inout[:,1])
+		inout = inout[np.where(inout[:]==4, True, False)]
 		return inout
 
 	def speedtest(self, inout):
