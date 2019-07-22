@@ -321,6 +321,7 @@ class RingBufferClass():
 		# Assign portions of the gdl input list to individual lists for individual frames.
 		for i, j in enumerate(inslist):
 			ins[j] = gdl[np.equal(gdl[:, 0], self.pfs-i), :]
+			ins[j] = self.interior_contours(ins[j])
 		#                                                                           #
 		########## This section is operations on a pair of frames output  ###########
 		#                                                                           #
@@ -354,7 +355,6 @@ class RingBufferClass():
 		fourlist = self.distdirtest(fourlist)
 		# Test for direction and cleanup
 		fourlist = self.direction_cleanup(fourlist)
-		print(fourlist.shape)
 		# Run a speed test.  Nothing faster than our threshold
 		fourlist = self.speedtest(fourlist)
 		# Only keep continuous lines
@@ -399,6 +399,12 @@ class RingBufferClass():
 
 	def radius_thresh(self, inout):
 		"""
+		Restricts the input data to only those rows which contain a radius within a threshold
+		
+		:param inout: Numpy array input. Must have size [:, 4]
+		
+		:returns: np.ndarray
+			-inout - Output numpy array with the shape [:, 4]
 		"""
 		# Local constants
 		radii_minimum = 2
@@ -408,6 +414,28 @@ class RingBufferClass():
 		# Remove rows with radii greater than a certain size
 		inout = inout[np.greater_equal(inout[:, 3], radii_minimum), :]
 		return inout
+
+	def interior_contours(self, in1):
+		"""
+		If two contours are centered on the same point in the input array, this function only
+		keeps the one with the largest radius.  This is not an optimized function, and it may
+		benefit from upgrades.
+		
+		:param in1: Numpy array input.  Must have size [:, 4]
+		
+		:returns: np.ndarray
+			-out - Output numpy array with the shape [:, 4]
+		"""
+		# Create an empty output array
+		out = np.empty((0, 4), int)
+		# Get an array of unique x, y pairs
+		if np.size(in1, 0) != 0:
+			points = np.unique(in1[:, 1:3], axis=0)
+			for i in points:
+				temp = np.where(in1[:, 1:3] == i, True, False)
+				temp = in1[temp[:, 0]]
+				out = np.vstack((out, np.array((temp[0, 0], i[0], i[1], np.amax(temp[:, 3])))))
+		return out
 
 	def getspeed(self, inout):
 		"""
