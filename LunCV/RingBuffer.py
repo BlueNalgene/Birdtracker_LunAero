@@ -212,19 +212,17 @@ class RingBufferClass():
 				newgdl = np.vstack((newgdl, np.array((gdl[i, 0], gdl[i, 1], gdl[i, 2], temp))))
 
 		# Run the gauntlet!
-		fltx, flty, fltz = self.gauntlet(gdl)
+		fourlist = self.gauntlet(gdl)
 
 		# TODO make tunable isclose value variables
 
 		##One list to rule them all
 		# Quick copout for 0 length lists.
-		if np.size(fltx, 0) == 0 and np.size(flty, 0) == 0 and np.size(fltz, 0) == 0:
-			gc.collect()
+		if np.size(fourlist, 0) == 0:
 			return img
 
 		# Combine our compared lists into a single master list.  Remove the old variables
-		fourlist = np.vstack((fltx, flty, fltz))
-		del fltx, flty, fltz
+		#fourlist = np.vstack((fltx, flty, fltz))
 		# Only keep lines where the first column is the same as the current frame number
 		fourlist = fourlist[np.where(fourlist[:, 0] == self.pfs)]
 		if fourlist.size > 0:
@@ -304,58 +302,68 @@ class RingBufferClass():
 			-flty - Paired list of good values from frame n-1 and n-2.  Has shape [:, 22]
 			-fltz - Paired list of good values from frame n-2 and n-3.  Has shape [:, 22]
 		"""
-		# Local constants
-		radii_minimum = 2
+		# Frame dictionaries and lists
+		ins = {"gdl0":np.empty((0, 8), int), "gdl1":np.empty((0, 8), int), \
+			"gdl2":np.empty((0, 8), int), "gdl3":np.empty((0, 8), int)}
+		outs = {"fltx":np.empty((0, 8), int), "flty":np.empty((0, 8), int), \
+			"fltz":np.empty((0, 8), int)}
+		inslist = ["gdl0", "gdl1", "gdl2", "gdl3"]
+		outslist = ["fltx", "flty", "fltz"]
+		#                                                                           #
+		########## This section is operations on a single frame's output  ###########
+		#                                                                           #
 		# Multiply rows to increase accuracy
 		# Make an int only array (multiplied by 10 to include significant digit decimal) for x,y
 		# locaions.  Remember the 10x!
 		gdl = (gdl * np.array([1, 10, 10, 10000], np.newaxis)).astype(dtype=int)
-		# Remove rows with radii less than a certain size
-		gdl = gdl[np.greater_equal(gdl[:, 3], radii_minimum), :]
-		# List of Arays
-		ins = {"gdl0":np.empty((0, 9), int), "gdl1":np.empty((0, 9), int), \
-			"gdl2":np.empty((0, 9), int), "gdl3":np.empty((0, 9), int)}
-		outs = {"fltx":np.empty((0, 9), int), "flty":np.empty((0, 9), int), \
-			"fltz":np.empty((0, 9), int)}
-		inslist = ["gdl0", "gdl1", "gdl2", "gdl3"]
-		outslist = ["fltx", "flty", "fltz"]
-		for i in range(0, 4):
-			ins[inslist[i]] = gdl[np.equal(gdl[:, 0], self.pfs-i), :]
-		for i in range(0, 3):
+		# Only use radii within a certain size threshold
+		gdl = self.radius_thresh(gdl)
+		# Assign portions of the gdl input list to individual lists for individual frames.
+		for i, j in enumerate(inslist):
+			ins[j] = gdl[np.equal(gdl[:, 0], self.pfs-i), :]
+		#                                                                           #
+		########## This section is operations on a pair of frames output  ###########
+		#                                                                           #
+		# Iterate through the outslist to create a set of paired frames and run 1st order tests
+		for i, j in enumerate(outslist):
 			# Process each sequential image for distance
-			outs[outslist[i]] = self.stackdistance(ins[inslist[i]], ins[inslist[i+1]])
+			outs[j] = self.stackdistance(ins[inslist[i]], ins[inslist[i+1]])
 			# Get speed of each item on the list
-			outs[outslist[i]] = self.getspeed(outs[outslist[i]])
+			outs[j] = self.getspeed(outs[j])
 			# Get direction for each item on the list
-			outs[outslist[i]] = self.getdir(outs[outslist[i]])
+			outs[j] = self.getdir(outs[j])
 			# Run a size test.  The radius should be relatively constant.
-			outs[outslist[i]] = outs[outslist[i]][np.isclose(outs[outslist[i]][:, 3], \
-				outs[outslist[i]][:, 7], rtol=self.radr, atol=self.rada)]
-			# Run a size test.  Nothing larger than x radius
-			outs[outslist[i]] = self.sizetest(outs[outslist[i]])
-		# Compare the generated lists (second order)
-		fltn = self.combineperms(outs["fltx"], outs["flty"])
-		outs["flty"] = self.combineperms(outs["flty"], outs["fltz"])
-		outs["fltz"] = self.combineperms(outs["fltx"], outs["fltz"])
-		outs["fltx"] = fltn
-		for i in range(0, 3):
-			# If the direction and location puts it near the edge, print a special code
-			self.edgecheck(outs[outslist[i]])
-			#If we have empty lists, we need to make them empty with the right size
-			outs[outslist[i]] = self.gapinghole(outs[outslist[i]])
-			# Test distance/direction
-			outs[outslist[i]] = self.distdirtest(outs[outslist[i]])
-			# Test for direction and cleanup
-			outs[outslist[i]] = self.direction_cleanup(outs[outslist[i]])
-			# Run a speed test.  Nothing faster than our threshold
-			outs[outslist[i]] = self.speedtest(outs[outslist[i]])
-			# Only keep continuous lines
-			outs[outslist[i]] = self.linear_jump(outs[outslist[i]])
-			# Check that we are not bouncing around the same craters
-			outs[outslist[i]] = self.reversal_check(outs[outslist[i]])
-			# Sync up the velocity values
-			outs[outslist[i]] = self.match_speed(outs[outslist[i]])
-		return outs["fltx"], outs["flty"], outs["fltz"]
+			outs[j] = outs[j][np.isclose(outs[j][:, 3], outs[j][:, 7], rtol=self.radr, atol=self.rada)]
+		#                                                                           #
+		########## This section is operations on combined 1-2, 2-3 output ###########
+		#                                                                           #
+		# Create our big "fourlist"
+		#fltn = self.combineperms(outs["fltx"], outs["flty"])
+		#outs["flty"] = self.combineperms(outs["flty"], outs["fltz"])
+		#outs["fltz"] = self.combineperms(outs["fltx"], outs["fltz"])
+		#outs["fltx"] = fltn
+		fourlist = np.vstack((\
+			self.combineperms(outs["fltx"], outs["flty"]), \
+				self.combineperms(outs["flty"], outs["fltz"]), \
+					self.combineperms(outs["fltx"], outs["fltz"])))
+		#If we have empty lists, we need to make them empty with the right size
+		fourlist = self.gapinghole(fourlist)
+		# If the direction and location puts it near the edge, print a special code
+		self.edgecheck(fourlist)
+		# Test distance/direction
+		fourlist = self.distdirtest(fourlist)
+		# Test for direction and cleanup
+		fourlist = self.direction_cleanup(fourlist)
+		print(fourlist.shape)
+		# Run a speed test.  Nothing faster than our threshold
+		fourlist = self.speedtest(fourlist)
+		# Only keep continuous lines
+		fourlist = self.linear_jump(fourlist)
+		# Check that we are not bouncing around the same craters
+		fourlist = self.reversal_check(fourlist)
+		# Sync up the velocity values
+		fourlist = self.match_speed(fourlist)
+		return fourlist
 
 	def stackdistance(self, in1, in2, smin=2, smax=200):
 		"""
@@ -385,7 +393,21 @@ class RingBufferClass():
 			# The value at dist passes a test, we treat the row as true, else false row.
 			# This is broadcast back to our out
 			out = out[np.where((out[:, 8]/10 > smin) & (out[:, 8]/10 < smax), True, False)]
+		else:
+			out = np.empty((0, 9), int)
 		return out
+
+	def radius_thresh(self, inout):
+		"""
+		"""
+		# Local constants
+		radii_minimum = 2
+		radii_maximum = 316000
+		# Remove rows with radii less than a certain size
+		inout = inout[np.less_equal(inout[:, 3], radii_maximum), :]
+		# Remove rows with radii greater than a certain size
+		inout = inout[np.greater_equal(inout[:, 3], radii_minimum), :]
+		return inout
 
 	def getspeed(self, inout):
 		"""
@@ -399,6 +421,7 @@ class RingBufferClass():
 			-out - Output numpy array with the shape [:, 8]
 		"""
 		if np.size(inout, 0) == 0:
+			inout = np.empty((0, 10), int)
 			return inout
 		inout = np.column_stack((inout, np.divide(inout[:, 8], np.subtract(inout[:, 0], \
 			inout[:, 4]))))
@@ -415,6 +438,7 @@ class RingBufferClass():
 			-out - Output numpy array with the shape [:, 8]
 		"""
 		if np.size(inout, 0) == 0:
+			inout = np.empty((0, 11), int)
 			return inout
 		inout = np.column_stack((inout, np.arctan(np.divide(np.subtract(inout[:, 2], inout[:, 6]),\
 			np.subtract(inout[:, 1], inout[:, 5])))*(180/np.pi)))
@@ -459,10 +483,14 @@ class RingBufferClass():
 		:returns: np.ndarray
 			-out - Output numpy array with the shape [:, 22]
 		"""
-		inout = np.column_stack((np.sign(np.subtract(inout[:, 5], inout[:, 1])), np.sign(np.subtract(inout[:, 6], inout[:, 2])), np.sign(np.subtract(inout[:, 16], inout[:, 12])), np.sign(np.subtract(inout[:, 17], inout[:, 13]))))
-		inout = np.abs(np.column_stack((np.add(inout[:, 0], inout[:, 2]), np.add(inout[:, 1], inout[:, 3]))))
-		inout = np.add(inout[:,0],inout[:,1])
-		inout = inout[np.where(inout[:]==4, True, False)]
+		if inout.shape[0] > 0:
+			temp = np.column_stack((np.sign(np.subtract(inout[:, 5], inout[:, 1])), np.sign(np.subtract(inout[:, 6], inout[:, 2])), np.sign(np.subtract(inout[:, 16], inout[:, 12])), np.sign(np.subtract(inout[:, 17], inout[:, 13]))))
+			temp = np.abs(np.column_stack((np.add(temp[:, 0], temp[:, 2]), np.add(temp[:, 1], temp[:, 3]))))
+			temp = np.add(temp[:,0], temp[:,1])
+			inout = inout[np.where(temp[:]==4, True, False)]
+		# The above can make "empty" arrays "None", so if we None'd it, make it 0 agian.
+		if inout.shape[0] == 0:
+			inout = np.empty((0, 22), int)
 		return inout
 
 	def speedtest(self, inout):
@@ -476,16 +504,6 @@ class RingBufferClass():
 		inout = inout[np.where(inout[:, 20] < threshmax)]
 		# Keep only lines with similar speed values
 		inout = inout[np.isclose(inout[:, 9], inout[:, 20], rtol=self.sper, atol=self.spea)]
-		return inout
-
-	def sizetest(self, inout):
-		"""
-		Tests the size recorded for a threshold.  If something is too big, we will ignore it.
-		"""
-		# Threshold determined experimentally by Alyse's stats tests as the too big thresh
-		threshmax = 316000
-		inout = inout[np.where(inout[:, 3] < threshmax)]
-		inout = inout[np.where(inout[:, 7] < threshmax)]
 		return inout
 
 	def gapinghole(self, inout):
